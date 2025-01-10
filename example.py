@@ -1,15 +1,16 @@
 import typing
 
-from makeprocess import MakeProcess
+import makeprocess
+makeprocess.LOGGING = True
 
-class TestClass(MakeProcess):
+class TestClass(makeprocess.MakeProcess):
     def __init__(self, i: int = 0):
         self.i = i
     
     def show(self: typing.Self) -> None:
         print(f"{self.__class__} {self.i = }")
 
-class Test(MakeProcess):
+class Test(makeprocess.MakeProcess):
     def __init__(self):
         print("Test")
 
