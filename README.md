@@ -7,4 +7,4 @@ little module came to gather by hacking the functions ```__code__``` attributum
 It automaticly changes out the classes ```__init__``` function and your defined functions.
 
 # TODO
-- add special case funtions list to be changed out
+- add special case funtions list to change out
