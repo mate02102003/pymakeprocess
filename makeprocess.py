@@ -10,7 +10,7 @@ import typing
 
 LOGGING: bool = False
 
-CO_NAMES: typing.Final[tuple[str]] = (
+_CO_NAMES: typing.Final[tuple[str]] = (
     "co_argcount",
     "co_posonlyargcount",
     "co_kwonlyargcount",
@@ -34,12 +34,12 @@ CO_NAMES: typing.Final[tuple[str]] = (
 def get_func_code_attributes(func: types.FunctionType) -> dict[str, typing.Any]:
     attrs = {}
 
-    for co in CO_NAMES:
+    for co in _CO_NAMES:
         attrs[co] = getattr(func.__code__, co)
 
     return attrs
 
-class Object:
+class _Object:
     def __init__(self):
         ...
 
@@ -47,7 +47,7 @@ class Object:
         ...
 
 class MakeProcess(multiprocessing.Process):
-    this: type[typing.Self] | Object
+    this: type[typing.Self] | _Object
 
     DESTROY_MESSAGE: str = "DESTROY-OBJECT"
 
@@ -69,16 +69,19 @@ class MakeProcess(multiprocessing.Process):
     def run(self: typing.Self) -> None:
         if LOGGING: print("INFO:", f"STARTING PROCESS pid({self.pid})")
 
-        Object.__init__.__code__ = Object.__init__.__code__.replace(**self.cls_init_code_attrs)
-        self.this = Object(*self.args, **self.kwargs)
+        _Object.__init__.__code__ = _Object.__init__.__code__.replace(**self.cls_init_code_attrs)
+        self.this = _Object(*self.args, **self.kwargs)
+        if LOGGING: print("INFO:", f"OBJECT INITIALIZED {self.this}")
 
         while (func_code_data:=self.pipe_main_recv.recv()) != self.DESTROY_MESSAGE:
-            Object._dumy.__code__ = Object._dumy.__code__.replace(**func_code_data)
-
+            _Object._dumy.__code__ = _Object._dumy.__code__.replace(**func_code_data)
+            
+            name: str                     = self.pipe_main_recv.recv()
             args:  tuple[typing.Any, ...] = self.pipe_main_recv.recv()
             kwargs: dict[str, typing.Any] = self.pipe_main_recv.recv()
-
-            self.pipe_fork_send.send(Object._dumy(self.this, *args, **kwargs))
+            
+            if LOGGING: print("INFO:", f"METHOD CALLED {name}")
+            self.pipe_fork_send.send(_Object._dumy(self.this, *args, **kwargs))
         
         if LOGGING: print("INFO:", f"CLOSING PROCESS pid({self.pid})")
     
@@ -105,9 +108,8 @@ class MakeProcess(multiprocessing.Process):
             method_code_data = get_func_code_attributes(cls_method)
 
             def method(self: typing.Self, *args, **kwargs) -> typing.Any:
-                local_method_code_data = method_code_data.copy()
-
-                self.pipe_main_send.send(local_method_code_data)
+                self.pipe_main_send.send(method_code_data)
+                self.pipe_main_send.send(cls_method.__name__)
                 self.pipe_main_send.send(args)
                 self.pipe_main_send.send(kwargs)
 
