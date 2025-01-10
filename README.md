@@ -10,9 +10,11 @@ It automaticly changes out the classes ```__init__``` function and your defined 
 *NOTE: This small module was created for my own need!*
 
 # Includes
-1. class MakeProcess:
+1. MakeProcess
+    - class
     - subclass to turn class into a process
-2. LOGGING constant (default False)
+2. LOGGING
+    - constant (default False)
     - turn logging on and off
 
 # TODO
