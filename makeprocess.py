@@ -114,29 +114,3 @@ class MakeProcess(multiprocessing.Process):
                 return self.pipe_fork_recv.recv()
             
             setattr(cls, cls_method.__name__, method)
-
-class TestClass(MakeProcess):
-    def __init__(self, i: int = 0):
-        self.i = i
-    
-    def show(self: typing.Self) -> None:
-        print(f"{self.__class__} {self.i = }")
-
-class Test(MakeProcess):
-    def __init__(self):
-        print("Test")
-
-if __name__ == "__main__":
-    t1 = TestClass(1)
-    t2 = Test()
-
-    t1.show()
-
-    t1.stop()
-    t2.stop()
-
-    # print("MakeProcess:", *dir(MakeProcess), sep="\n\t")
-    # print("TestClass:", *filter(lambda key: key not in dir(MakeProcess), dir(TestClass)), sep="\n\t")
-    # print("Test:", *filter(lambda key: key not in dir(MakeProcess), dir(Test)), sep="\n\t")
-
-    pass
