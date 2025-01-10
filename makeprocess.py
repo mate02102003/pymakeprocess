@@ -8,6 +8,11 @@ import multiprocessing.connection
 import types
 import typing
 
+__all__ = [
+    "LOGGING",
+    "MakeProcess"
+]
+
 LOGGING: bool = False
 
 _CO_NAMES: typing.Final[tuple[str]] = (
@@ -31,7 +36,7 @@ _CO_NAMES: typing.Final[tuple[str]] = (
     "co_exceptiontable",
 )
 
-def get_func_code_attributes(func: types.FunctionType) -> dict[str, typing.Any]:
+def _get_func_code_attributes(func: types.FunctionType) -> dict[str, typing.Any]:
     attrs = {}
 
     for co in _CO_NAMES:
@@ -89,7 +94,7 @@ class MakeProcess(multiprocessing.Process):
         self.pipe_main_send.send(self.DESTROY_MESSAGE)
             
     def __init_subclass__(cls: type[typing.Self]):
-        cls_init_code_attrs = get_func_code_attributes(cls.__init__)
+        cls_init_code_attrs = _get_func_code_attributes(cls.__init__)
 
         def init(self: typing.Self, *args, **kwargs) -> None:
             MakeProcess.__init__(self, cls_init_code_attrs, *args, **kwargs)
@@ -105,7 +110,7 @@ class MakeProcess(multiprocessing.Process):
             )
         )
         for cls_method in cls_methods:
-            method_code_data = get_func_code_attributes(cls_method)
+            method_code_data = _get_func_code_attributes(cls_method)
 
             def method(self: typing.Self, *args, **kwargs) -> typing.Any:
                 self.pipe_main_send.send(method_code_data)
