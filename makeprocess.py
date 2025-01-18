@@ -7,13 +7,34 @@ import multiprocessing
 import multiprocessing.connection
 import types
 import typing
+import logging
+import functools
 
 __all__ = [
     "LOGGING",
+    "ProcessLoggerHandler",
+    "ProcessLogger",
     "MakeProcess"
 ]
 
+class ProcessLoggerHandler(logging.Handler):
+    def __init__(self, level: str | int = logging.NOTSET):
+        super().__init__(level)
+    
+    def emit(self, record: logging.LogRecord):
+        print("%s: %s" % (record.levelname, record.getMessage()))
+
+class ProcessLogger(logging.Logger):
+    def __init__(self, name: str = "makeprocess", level: str | int = logging.NOTSET):
+        super().__init__(name, level)
+
+        self.addHandler(ProcessLoggerHandler())
+
 LOGGING: bool = False
+_LOGGER: logging.Logger = logging.getLogger("makeprocess") \
+    if not logging.getLoggerClass() is logging.Logger else \
+        ProcessLogger()
+
 
 _CO_NAMES: typing.Final[tuple[str]] = (
     "co_argcount",
@@ -35,6 +56,14 @@ _CO_NAMES: typing.Final[tuple[str]] = (
     "co_linetable",
     "co_exceptiontable",
 )
+
+def _get_class_data(cls: type) -> dict[str, typing.Any]:
+    data = {}
+
+    for attr in functools.WRAPPER_ASSIGNMENTS:
+        data[attr] = getattr(cls, attr)
+    
+    return data
 
 def _get_func_code_attributes(func: types.FunctionType) -> dict[str, typing.Any]:
     attrs = {}
@@ -61,9 +90,10 @@ class MakeProcess(multiprocessing.Process):
     pipe_fork_recv: multiprocessing.connection.PipeConnection
     pipe_fork_send: multiprocessing.connection.PipeConnection
 
-    def __init__(self: typing.Self, cls_init_code_attrs: types.FunctionType, *args: tuple[typing.Any, ...], **kwargs: dict[str, typing.Any]):
+    def __init__(self: typing.Self, cls_data: dict[str, typing.Any], cls_init_code_attrs: types.FunctionType, *args: tuple[typing.Any, ...], **kwargs: dict[str, typing.Any]):
         super().__init__()
 
+        self.cls_data = cls_data
         self.cls_init_code_attrs = cls_init_code_attrs
         self.args = args
         self.kwargs = kwargs
@@ -72,11 +102,14 @@ class MakeProcess(multiprocessing.Process):
         self.pipe_fork_recv, self.pipe_fork_send = multiprocessing.Pipe(duplex=False)
     
     def run(self: typing.Self) -> None:
-        if LOGGING: print("INFO:", f"STARTING PROCESS pid({self.pid})")
+        if LOGGING: _LOGGER.info(f"STARTING PROCESS pid({self.pid})")
 
         _Object.__init__.__code__ = _Object.__init__.__code__.replace(**self.cls_init_code_attrs)
         self.this = _Object(*self.args, **self.kwargs)
-        if LOGGING: print("INFO:", f"OBJECT INITIALIZED {self.this}")
+        for attr in self.cls_data:
+            setattr(self.this, attr, self.cls_data[attr])
+
+        if LOGGING: _LOGGER.info(f"OBJECT INITIALIZED {self.this}")
 
         while (func_code_data:=self.pipe_main_recv.recv()) != self.DESTROY_MESSAGE:
             _Object._dumy.__code__ = _Object._dumy.__code__.replace(**func_code_data)
@@ -85,19 +118,20 @@ class MakeProcess(multiprocessing.Process):
             args:  tuple[typing.Any, ...] = self.pipe_main_recv.recv()
             kwargs: dict[str, typing.Any] = self.pipe_main_recv.recv()
             
-            if LOGGING: print("INFO:", f"METHOD CALLED {name}")
+            if LOGGING: _LOGGER.info(f"METHOD CALLED {name}")
             self.pipe_fork_send.send(_Object._dumy(self.this, *args, **kwargs))
         
-        if LOGGING: print("INFO:", f"CLOSING PROCESS pid({self.pid})")
+        if LOGGING: _LOGGER.info(f"CLOSING PROCESS pid({self.pid})")
     
     def stop(self: typing.Self) -> None:
         self.pipe_main_send.send(self.DESTROY_MESSAGE)
             
     def __init_subclass__(cls: type[typing.Self]):
+        cls_data = _get_class_data(cls)
         cls_init_code_attrs = _get_func_code_attributes(cls.__init__)
 
         def init(self: typing.Self, *args, **kwargs) -> None:
-            MakeProcess.__init__(self, cls_init_code_attrs, *args, **kwargs)
+            MakeProcess.__init__(self, cls_data, cls_init_code_attrs, *args, **kwargs)
             self.start()
         
         cls.__init__ = init
